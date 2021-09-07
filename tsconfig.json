@@ -12,7 +12,8 @@
     "noEmit": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
-    "noImplicitReturns": true
+    "noImplicitReturns": true,
+    "allowUmdGlobalAccess": true,
   },
-  "include": ["./src"]
+  "include": ["./@types", "./src"]
 }
