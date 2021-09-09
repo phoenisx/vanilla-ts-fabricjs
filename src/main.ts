@@ -1,50 +1,16 @@
 import "./style.css";
 import { uuidv4 } from "./uuid4";
-import StarSVG from "./star.svg";
 import { Ellipse } from "./Ellipse";
 import { clear, STORE, update } from "./store";
+import { getRandomColors, getRandomPos } from "./utils";
+import { Star } from "./Star";
 // import { fabric } from "./vendor/fabric";
-
-const CANVAS_DIMS = {
-  w: 1024,
-  h: 576,
-};
-
-
-const colors = [
-  /* [fill, stroke] */
-  ["#876FC3", "#694AB5"],
-  ["#D55D8D", "#CA3570"],
-  ["#DE8854", "#D66A29"],
-  ["#C7CC66", "#B9C03F"],
-  ["#73BF8B", "#50AF6E"],
-  ["#4980B6", "#6D99C5"],
-  ["#72C074", "#4EB151"],
-] as const;
-
-/**
- * @returns {[number, number]} [Fill, Stroke]
- */
-const getRandomColors = () => {
-  const index = Math.floor((Math.random() * 100) % colors.length);
-  return colors[index];
-};
-/**
- * @returns {[number, number]} [Width, Height], [Left, Right]
- */
-const getRandomPos = () => [
-  Math.floor((Math.random() * 100) % CANVAS_DIMS.w),
-  Math.floor((Math.random() * 100) % CANVAS_DIMS.h),
-];
 
 const app = document.querySelector<HTMLDivElement>("#app")!;
 
 const canvas = new fabric.Canvas(
   app.querySelector("canvas")! as HTMLCanvasElement
 );
-const ellipsis = new Ellipse(canvas);
-
-
 
 app.querySelector("#createPage")?.addEventListener("click", () => {
   // BE needs to create and return an ID
@@ -67,7 +33,8 @@ const createCircle = (id: string, x: number, y: number) => {
   });
 };
 
-const ellipseEditor = new Ellipse(canvas);;
+const ellipseEditor = new Ellipse(canvas);
+const starEditor = new Star(canvas);
 
 app.querySelector("#createCircle")?.addEventListener("click", (e) => {
   // Object Creation is FE specific, we will generate the ID here, and BE will store it in
@@ -115,7 +82,9 @@ app.querySelector("#recreatePage")?.addEventListener("click", () => {
   }
   if (STORE.pageHistoryStack[STORE.activePage].length > 0) {
     canvas.loadFromJSON(
-      STORE.pageHistoryStack[STORE.activePage][STORE.pageHistoryStack[STORE.activePage].length - 1],
+      STORE.pageHistoryStack[STORE.activePage][
+        STORE.pageHistoryStack[STORE.activePage].length - 1
+      ],
       (...args: any[]) => {
         // OnComplete
       }
@@ -169,7 +138,8 @@ app.addEventListener("click", (e: MouseEvent) => {
 
 app.querySelector("#undo")?.addEventListener("click", () => {
   // Shuffle the recent update between history and redo list.
-  STORE.redoUpdateStack[STORE.activePage] = STORE.redoUpdateStack[STORE.activePage] || [];
+  STORE.redoUpdateStack[STORE.activePage] =
+    STORE.redoUpdateStack[STORE.activePage] || [];
   const currentPageHistory = STORE.pageHistoryStack[STORE.activePage];
   const recentUpdate = currentPageHistory.pop();
   if (recentUpdate) {
@@ -177,8 +147,7 @@ app.querySelector("#undo")?.addEventListener("click", () => {
     const last = currentPageHistory[lastIndex];
     STORE.redoUpdateStack[STORE.activePage].push(recentUpdate);
     if (last) {
-      canvas.loadFromJSON(last, () => {
-      });
+      canvas.loadFromJSON(last, () => {});
     } else {
       canvas.clear();
     }
@@ -193,8 +162,7 @@ app.querySelector("#redo")?.addEventListener("click", () => {
     const lastUndo = activeRedoStack.pop();
     if (lastUndo) {
       currentPageHistory.push(lastUndo);
-      canvas.loadFromJSON(lastUndo, () => {
-      });
+      canvas.loadFromJSON(lastUndo, () => {});
     }
   }
 });
@@ -291,31 +259,23 @@ app.querySelector("#alignCenter")?.addEventListener("click", (e) => {
 
 app.querySelector("#addStar")?.addEventListener("click", (e) => {
   // https://github.com/fabricjs/fabric.js/issues/2019
-  const color = getRandomColors();
-  const pos = getRandomPos();
-  const objectId = uuidv4();
-  fabric.loadSVGFromURL(StarSVG, (results) => {
-    const star = results[0];
-    star.set({
-      // @ts-ignore
-      id: objectId,
-      type: "star",
-      top: pos[1],
-      left: pos[0],
-      fill: color[0],
-      stroke: color[1],
-      strokeWidth: 0.5,
-      scaleX: 10,
-      scaleY: 10,
-    } as fabric.IPathOptions);
-    canvas.add(star);
-    STORE.objectsPerPage[STORE.activePage] = {
-      [objectId]: {
-        id: objectId,
-        object: star,
-      },
-    };
-    update(canvas);
+
+  // const polygon = new fabric.Polygon(
+  //   [
+  //     { x: 200, y: 10 },
+  //     { x: 250, y: 50 },
+  //     { x: 250, y: 180 },
+  //     { x: 150, y: 180 },
+  //     { x: 150, y: 50 },
+  //   ],
+  //   {
+  //     fill: "green",
+  //   }
+  // );
+  // const circle = createCircle(objectId, pos[0], pos[1]);
+  (<HTMLButtonElement>e.target).textContent = "Drawing Star";
+  starEditor.init(() => {
+    // On End
+    (<HTMLButtonElement>e.target).textContent = "Create Star";
   });
 });
-

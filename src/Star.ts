@@ -1,9 +1,9 @@
-// https://stackoverflow.com/questions/33111045/how-to-free-draw-circle-using-fabric-js
-
+import StarSVG from "./star.svg";
 import { STORE, update } from "./store";
+import { getRandomColors } from "./utils";
 import { uuidv4 } from "./uuid4";
 
-export class Ellipse {
+export class Star {
   canvas: fabric.Canvas;
   className = "Circle";
   id: string;
@@ -11,7 +11,7 @@ export class Ellipse {
   startX: number = 0;
   startY: number = 0;
   currentCb?: () => void;
-  currentEllipse?: fabric.Ellipse;
+  currentShape?: fabric.Object;
 
   constructor(canvas: fabric.Canvas) {
     this.canvas = canvas;
@@ -31,7 +31,8 @@ export class Ellipse {
     this.canvas.off("mouse:move", this.onMouseMove);
     this.canvas.off("mouse:up", this.onMouseUp);
     this.canvas.off("object:moving", this.disable);
-    this.currentEllipse = undefined;
+    this.currentShape = undefined;
+    this.canvas.selection = true;
     this.currentCb && this.currentCb();
   }
 
@@ -65,14 +66,9 @@ export class Ellipse {
     }
 
     let pointer = this.canvas.getPointer(obj.e);
-    let activeObj = this.currentEllipse;
+    let activeObj = this.currentShape;
 
-    if (activeObj && activeObj instanceof fabric.Ellipse) {
-      // const circle = <fabric.Ellipse>activeObj;
-      activeObj.stroke = "red";
-      activeObj.strokeWidth = 5;
-      activeObj.fill = "red";
-
+    if (activeObj) {
       if (this.startX > pointer.x) {
         activeObj.set({
           left: Math.abs(pointer.x),
@@ -85,11 +81,13 @@ export class Ellipse {
         });
       }
 
+      console.log("Move: ",  this.startX, pointer.x,  Math.abs(this.startX - pointer.x) / 22);
+
       activeObj.set({
-        rx: Math.abs(this.startX - pointer.x) / 2,
+        scaleX: Math.abs(this.startX - pointer.x) / 22,
       });
       activeObj.set({
-        ry: Math.abs(this.startY - pointer.y) / 2,
+        scaleY: Math.abs(this.startY - pointer.y) / 22,
       });
       activeObj.setCoords();
     }
@@ -98,31 +96,44 @@ export class Ellipse {
 
   onMouseDown = (obj: fabric.IEvent<Event>) => {
     console.log("on mouse down canvas");
-    this.enable();
-
     let pointer = this.canvas.getPointer(obj.e);
     this.startX = pointer.x;
     this.startY = pointer.y;
     const objectId = uuidv4();
+    this.canvas.selection = false;
 
-    let ellipse = new fabric.Ellipse({
-      // @ts-ignore
-      id: objectId,
-      top: this.startY,
-      left: this.startX,
-      rx: 0,
-      ry: 0,
-      // transparentCorners: false,
-      // hasBorders: false,
-    });
-
-    this.canvas.add(ellipse);
-    this.currentEllipse = ellipse;
-    STORE.objectsPerPage[STORE.activePage] = {
-      [objectId]: {
+    /**
+     * Star SVG has a default width/height of
+     * 22/22, that means to reach a scale of 1,
+     * we need to traverse top and left to 22 pixels
+     *
+     * Thus we can say, our scale for Star on mouse move
+     * will be the diff of top and left divided 22.
+     */
+    fabric.loadSVGFromURL(StarSVG, (results) => {
+      const star = results[0];
+      const color = getRandomColors();
+      star.set({
+        // @ts-ignore
         id: objectId,
-        object: ellipse,
-      },
-    };
+        type: "star",
+        top: this.startY,
+        left: this.startX,
+        fill: color[0],
+        stroke: color[1],
+        strokeWidth: 0.5,
+        scaleX: 0,
+        scaleY: 0,
+      } as fabric.IPathOptions);
+      this.canvas.add(star);
+      this.currentShape = star;
+      STORE.objectsPerPage[STORE.activePage] = {
+        [objectId]: {
+          id: objectId,
+          object: star,
+        },
+      };
+      this.enable();
+    });
   }
 }
