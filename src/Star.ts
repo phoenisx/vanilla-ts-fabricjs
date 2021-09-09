@@ -116,7 +116,7 @@ export class Star {
       star.set({
         // @ts-ignore
         id: objectId,
-        type: "star",
+        shape: "star", // This is a custom property so that I don't have to mess with fabric prototypes
         top: this.startY,
         left: this.startX,
         fill: color[0],
@@ -137,3 +137,4 @@ export class Star {
     });
   }
 }
+
