@@ -1,5 +1,6 @@
 import "./style.css";
 import { uuidv4 } from "./uuid4";
+import StarSVG from "./star.svg";
 // import { fabric } from "./vendor/fabric";
 
 const CANVAS_DIMS = {
@@ -19,10 +20,16 @@ const colors = [
   ["#72C074", "#4EB151"],
 ] as const;
 
+/**
+ * @returns {[number, number]} [Fill, Stroke]
+ */
 const getRandomColors = () => {
   const index = Math.floor((Math.random() * 100) % colors.length);
   return colors[index];
 };
+/**
+ * @returns {[number, number]} [Width, Height], [Left, Right]
+ */
 const getRandomPos = () => [
   Math.floor((Math.random() * 100) % CANVAS_DIMS.w),
   Math.floor((Math.random() * 100) % CANVAS_DIMS.h),
@@ -42,7 +49,7 @@ const objectsPerPage: Record<string, Record<string, FabricObjects>> = {};
 const pageHistoryStack: Record<string, string[]> = {};
 const redoUpdateStack: Record<string, string[]> = {};
 let activePage = "";
-let activeObject: fabric.Object & { id?: string } | null = null;
+let activeObject: (fabric.Object & { id?: string }) | null = null;
 
 app.querySelector("#createPage")?.addEventListener("click", () => {
   // BE needs to create and return an ID
@@ -63,7 +70,10 @@ const update = () => {
 
     // Reset Redo stack, since history stack has updated here and there's
     // nothing to redo to.
-    if (!redoUpdateStack[activePage] || redoUpdateStack[activePage].length > 0) {
+    if (
+      !redoUpdateStack[activePage] ||
+      redoUpdateStack[activePage].length > 0
+    ) {
       redoUpdateStack[activePage] = [];
     }
   }
@@ -75,6 +85,20 @@ const clear = (lastUpdate?: string) => {
   }
 };
 
+const createCircle = (id: string, x: number, y: number) => {
+  const color = getRandomColors();
+  return new fabric.Circle({
+    // @ts-ignore
+    id: id,
+    top: y,
+    left: x,
+    radius: 20,
+    fill: color[0],
+    stroke: color[1],
+    strokeWidth: 4,
+  });
+};
+
 app.querySelector("#createCircle")?.addEventListener("click", () => {
   // Object Creation is FE specific, we will generate the ID here, and BE will store it in
   // the way they please, but they will always return in getAPI the last canvas JSON representation.
@@ -83,18 +107,10 @@ app.querySelector("#createCircle")?.addEventListener("click", () => {
     return;
   }
   const objectId = uuidv4();
-  const color = getRandomColors();
+
   const pos = getRandomPos();
-  const circle = new fabric.Circle({
-    // @ts-ignore
-    id: objectId,
-    top: pos[0],
-    left: pos[1],
-    radius: 20,
-    fill: color[0],
-    stroke: color[1],
-    strokeWidth: 4,
-  });
+  const circle = createCircle(objectId, pos[0], pos[1]);
+
   canvas.add(circle);
   objectsPerPage[activePage] = {
     [objectId]: {
@@ -210,7 +226,7 @@ app.querySelector("#undo")?.addEventListener("click", () => {
     if (last) {
       canvas.loadFromJSON(last, () => {
         console.log("Undo complete");
-      })
+      });
     } else {
       canvas.clear();
     }
@@ -227,7 +243,7 @@ app.querySelector("#redo")?.addEventListener("click", () => {
       currentPageHistory.push(lastUndo);
       canvas.loadFromJSON(lastUndo, () => {
         console.log("Redo complete");
-      })
+      });
     }
   }
 });
@@ -236,7 +252,7 @@ const MARK_KEYS = {
   measure: "rerender",
   mark1: "rerender start",
   mark2: "rerender end",
-}
+};
 
 const Renderer = () => {
   const update = (time: number) => {
@@ -252,12 +268,16 @@ const Renderer = () => {
         API.timestamp = time;
         canvas.requestRenderAll();
         performance.mark(MARK_KEYS.mark2);
-        performance.measure(MARK_KEYS.measure, MARK_KEYS.mark1, MARK_KEYS.mark2)
+        performance.measure(
+          MARK_KEYS.measure,
+          MARK_KEYS.mark1,
+          MARK_KEYS.mark2
+        );
       }
     } else {
       API.timestamp = 0;
     }
-  }
+  };
   const API: {
     timestamp: number;
     rafId: number | null;
@@ -288,4 +308,63 @@ renderer.start();
 // @ts-ignore
 window.renderer = renderer;
 
+app.querySelector("#drawingMode")?.addEventListener("click", (e) => {
+  // http://fabricjs.com/freedrawing
+  canvas.isDrawingMode = !canvas.isDrawingMode;
+  (<HTMLButtonElement>e.target).textContent = canvas.isDrawingMode
+    ? "Exit Drawing Mode"
+    : "Drawing Mode";
+});
 
+/**
+ * Control Customisation:
+ * http://fabricjs.com/controls-customization
+ * http://fabricjs.com/customization
+ */
+
+app.querySelector("#addText")?.addEventListener("click", (e) => {
+  const text = "this is\na multiline\ntext\naligned right!";
+  const alignedRightText = new fabric.IText(text, {
+    textAlign: "right",
+  });
+  canvas.add(alignedRightText);
+});
+
+app.querySelector("#alignCenter")?.addEventListener("click", (e) => {
+  const object = canvas.getActiveObject();
+  console.log("Selected Object Type: ", object.type);
+  if (object.type === "i-text") {
+    (<fabric.Text>object).set("textAlign", "center");
+  }
+});
+
+app.querySelector("#addStar")?.addEventListener("click", (e) => {
+  // https://github.com/fabricjs/fabric.js/issues/2019
+  const color = getRandomColors();
+  const pos = getRandomPos();
+  const objectId = uuidv4();
+  fabric.loadSVGFromURL(StarSVG, (results) => {
+    console.log("Star SVG Loaded: ", results);
+    const star = results[0];
+    star.set({
+      // @ts-ignore
+      id: objectId,
+      type: "star",
+      top: pos[1],
+      left: pos[0],
+      fill: color[0],
+      stroke: color[1],
+      strokeWidth: 0.5,
+      scaleX: 10,
+      scaleY: 10,
+    } as fabric.IPathOptions);
+    canvas.add(star);
+    objectsPerPage[activePage] = {
+      [objectId]: {
+        id: objectId,
+        object: star,
+      },
+    };
+    update();
+  });
+});

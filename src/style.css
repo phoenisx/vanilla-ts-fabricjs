@@ -11,6 +11,10 @@
   display: flex;
 }
 
+.grid + .grid {
+  margin-top: 1rem;
+}
+
 .grid > button + button {
   margin-left: 1rem;
 }
