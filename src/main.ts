@@ -39,32 +39,39 @@ type FabricObjects = {
   object: fabric.Object;
 };
 const objectsPerPage: Record<string, Record<string, FabricObjects>> = {};
-const pages: Record<string, string[]> = {};
+const pageHistoryStack: Record<string, string[]> = {};
+const redoUpdateStack: Record<string, string[]> = {};
 let activePage = "";
 let activeObject: fabric.Object & { id?: string } | null = null;
 
 app.querySelector("#createPage")?.addEventListener("click", () => {
   // BE needs to create and return an ID
   const pageId = uuidv4();
-  pages[pageId] = [];
+  pageHistoryStack[pageId] = [];
   activePage = pageId;
 });
 
 const update = () => {
   if (activePage) {
-    if (pages[activePage].length >= MAX_HISTORY) {
-      pages[activePage].shift(); // Remove the oldest;
+    if (pageHistoryStack[activePage].length >= MAX_HISTORY) {
+      pageHistoryStack[activePage].shift(); // Remove the oldest;
     }
     const update = canvas.toJSON(["id"]);
-    pages[activePage].push(JSON.stringify(update));
+    pageHistoryStack[activePage].push(JSON.stringify(update));
     // console.log("Pages: ", JSON.stringify(update, null, 2));
     console.log("Pages: ", JSON.stringify(update, null, 2));
+
+    // Reset Redo stack, since history stack has updated here and there's
+    // nothing to redo to.
+    if (!redoUpdateStack[activePage] || redoUpdateStack[activePage].length > 0) {
+      redoUpdateStack[activePage] = [];
+    }
   }
 };
 const clear = (lastUpdate?: string) => {
   if (activePage) {
     // Clear everything but but the last recent element.
-    pages[activePage] = lastUpdate ? [lastUpdate] : [];
+    pageHistoryStack[activePage] = lastUpdate ? [lastUpdate] : [];
   }
 };
 
@@ -116,7 +123,7 @@ app.querySelector("#clearPage")?.addEventListener("click", () => {
   }
   canvas.clear();
   objectsPerPage[activePage] = {};
-  clear(pages[activePage].pop());
+  clear(pageHistoryStack[activePage].pop());
 });
 app.querySelector("#recreatePage")?.addEventListener("click", () => {
   // Object Creation is FE specific, we will generate the ID here, and BE will store it in
@@ -125,9 +132,9 @@ app.querySelector("#recreatePage")?.addEventListener("click", () => {
     console.log("No Active Page ID set");
     return;
   }
-  if (pages[activePage].length > 0) {
+  if (pageHistoryStack[activePage].length > 0) {
     canvas.loadFromJSON(
-      pages[activePage][pages[activePage].length - 1],
+      pageHistoryStack[activePage][pageHistoryStack[activePage].length - 1],
       (...args: any[]) => {
         // OnComplete
         console.log("On Load Complete: ", args);
@@ -180,38 +187,94 @@ app.addEventListener("click", (e: MouseEvent) => {
     case "changeFillColor":
       activeObject.set("fill", selectedColor[0]);
       console.log("New Color: ", selectedColor[0], activeObject.id);
+      update();
       break;
     case "changeStrokeColor":
       activeObject.set("stroke", selectedColor[1]);
+      update();
       break;
   }
-  update();
 });
+
+app.querySelector("#undo")?.addEventListener("click", () => {
+  // Shuffle the recent update between history and redo list.
+  redoUpdateStack[activePage] = redoUpdateStack[activePage] || [];
+  const currentPageHistory = pageHistoryStack[activePage];
+  const recentUpdate = currentPageHistory.pop();
+  console.log("Update: ", recentUpdate);
+  if (recentUpdate) {
+    const lastIndex = currentPageHistory.length - 1;
+    const last = currentPageHistory[lastIndex];
+    console.log("Undo started");
+    redoUpdateStack[activePage].push(recentUpdate);
+    if (last) {
+      canvas.loadFromJSON(last, () => {
+        console.log("Undo complete");
+      })
+    } else {
+      canvas.clear();
+    }
+  }
+});
+
+app.querySelector("#redo")?.addEventListener("click", () => {
+  // Shuffle the recent update between history and redo list.
+  const activeRedoStack = redoUpdateStack[activePage];
+  if (activeRedoStack && activeRedoStack.length > 0) {
+    const currentPageHistory = pageHistoryStack[activePage];
+    const lastUndo = activeRedoStack.pop();
+    if (lastUndo) {
+      currentPageHistory.push(lastUndo);
+      canvas.loadFromJSON(lastUndo, () => {
+        console.log("Redo complete");
+      })
+    }
+  }
+});
+
+const MARK_KEYS = {
+  measure: "rerender",
+  mark1: "rerender start",
+  mark2: "rerender end",
+}
 
 const Renderer = () => {
   const update = (time: number) => {
-    if (API.running) {
-      requestAnimationFrame(update);
+    if (API.rafId !== null) {
+      // This will pause infinitely, if Browser Tab is out-of-focus.
+      // We can hadle by replacing the `raf` call with `setTimeout` for the meantime
+      // till use re-focuses on the Tab. In this meantime the Framerates will reduce to 1fps.
+      // Since there is no activiity, I am guess this hack would work, but we will have to check
+      // because Video Streaming might require more frames per second to work, not sure.
+      API.rafId = requestAnimationFrame(update);
       if (time - API.timestamp > 1000 / 15) {
+        performance.mark(MARK_KEYS.mark1);
         API.timestamp = time;
         canvas.requestRenderAll();
+        performance.mark(MARK_KEYS.mark2);
+        performance.measure(MARK_KEYS.measure, MARK_KEYS.mark1, MARK_KEYS.mark2)
       }
     } else {
       API.timestamp = 0;
     }
   }
-  const API = {
+  const API: {
+    timestamp: number;
+    rafId: number | null;
+    start: () => void;
+    end: () => void;
+  } = {
     timestamp: 0,
-    running: false,
+    rafId: null,
     start() {
-      this.running = true;
-      requestAnimationFrame((time) => {
+      API.rafId = requestAnimationFrame((time) => {
         API.timestamp = time;
         update(API.timestamp);
       });
     },
     end() {
-      this.running = false;
+      API.rafId && cancelAnimationFrame(API.rafId);
+      API.rafId = null;
       API.timestamp = 0;
     },
   };

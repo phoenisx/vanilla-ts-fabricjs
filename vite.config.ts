@@ -13,9 +13,9 @@ export default defineConfig({
       },
     ],
   },
-  optimizeDeps: {
-    include: [`${srcPath}/vendors/fabric.js`],
-  },
+  // optimizeDeps: {
+  //   include: [`${srcPath}/vendors/fabric.js`],
+  // },
   server: {
     https: false,
   },
