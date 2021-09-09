@@ -1,13 +1,15 @@
 import "./style.css";
 import { uuidv4 } from "./uuid4";
 import StarSVG from "./star.svg";
+import { Ellipse } from "./Ellipse";
+import { clear, STORE, update } from "./store";
 // import { fabric } from "./vendor/fabric";
 
 const CANVAS_DIMS = {
   w: 1024,
   h: 576,
 };
-const MAX_HISTORY = 100;
+
 
 const colors = [
   /* [fill, stroke] */
@@ -40,50 +42,16 @@ const app = document.querySelector<HTMLDivElement>("#app")!;
 const canvas = new fabric.Canvas(
   app.querySelector("canvas")! as HTMLCanvasElement
 );
+const ellipsis = new Ellipse(canvas);
 
-type FabricObjects = {
-  id: string;
-  object: fabric.Object;
-};
-const objectsPerPage: Record<string, Record<string, FabricObjects>> = {};
-const pageHistoryStack: Record<string, string[]> = {};
-const redoUpdateStack: Record<string, string[]> = {};
-let activePage = "";
-let activeObject: (fabric.Object & { id?: string }) | null = null;
+
 
 app.querySelector("#createPage")?.addEventListener("click", () => {
   // BE needs to create and return an ID
   const pageId = uuidv4();
-  pageHistoryStack[pageId] = [];
-  activePage = pageId;
+  STORE.pageHistoryStack[pageId] = [];
+  STORE.activePage = pageId;
 });
-
-const update = () => {
-  if (activePage) {
-    if (pageHistoryStack[activePage].length >= MAX_HISTORY) {
-      pageHistoryStack[activePage].shift(); // Remove the oldest;
-    }
-    const update = canvas.toJSON(["id"]);
-    pageHistoryStack[activePage].push(JSON.stringify(update));
-    // console.log("Pages: ", JSON.stringify(update, null, 2));
-    console.log("Pages: ", JSON.stringify(update, null, 2));
-
-    // Reset Redo stack, since history stack has updated here and there's
-    // nothing to redo to.
-    if (
-      !redoUpdateStack[activePage] ||
-      redoUpdateStack[activePage].length > 0
-    ) {
-      redoUpdateStack[activePage] = [];
-    }
-  }
-};
-const clear = (lastUpdate?: string) => {
-  if (activePage) {
-    // Clear everything but but the last recent element.
-    pageHistoryStack[activePage] = lastUpdate ? [lastUpdate] : [];
-  }
-};
 
 const createCircle = (id: string, x: number, y: number) => {
   const color = getRandomColors();
@@ -99,26 +67,23 @@ const createCircle = (id: string, x: number, y: number) => {
   });
 };
 
-app.querySelector("#createCircle")?.addEventListener("click", () => {
+const ellipseEditor = new Ellipse(canvas);;
+
+app.querySelector("#createCircle")?.addEventListener("click", (e) => {
   // Object Creation is FE specific, we will generate the ID here, and BE will store it in
   // the way they please, but they will always return in getAPI the last canvas JSON representation.
-  if (!activePage) {
+  if (!STORE.activePage) {
     console.log("No Active Page ID set");
     return;
   }
-  const objectId = uuidv4();
 
   const pos = getRandomPos();
-  const circle = createCircle(objectId, pos[0], pos[1]);
-
-  canvas.add(circle);
-  objectsPerPage[activePage] = {
-    [objectId]: {
-      id: objectId,
-      object: circle,
-    },
-  };
-  update();
+  // const circle = createCircle(objectId, pos[0], pos[1]);
+  (<HTMLButtonElement>e.target).textContent = "Drawing Circle";
+  ellipseEditor.init(() => {
+    // On End
+    (<HTMLButtonElement>e.target).textContent = "Create Circle";
+  });
 });
 
 /**
@@ -127,33 +92,32 @@ app.querySelector("#createCircle")?.addEventListener("click", () => {
  * like Object.set("fill", "something"), needs to also populate with the changes in history.
  */
 canvas.on("object:modified", () => {
-  update();
+  update(canvas);
 });
 
 app.querySelector("#clearPage")?.addEventListener("click", () => {
   // Object Creation is FE specific, we will generate the ID here, and BE will store it in
   // the way they please, but they will always return in getAPI the last canvas JSON representation.
-  if (!activePage) {
+  if (!STORE.activePage) {
     console.log("No Active Page ID set");
     return;
   }
   canvas.clear();
-  objectsPerPage[activePage] = {};
-  clear(pageHistoryStack[activePage].pop());
+  STORE.objectsPerPage[STORE.activePage] = {};
+  clear(STORE.pageHistoryStack[STORE.activePage].pop());
 });
 app.querySelector("#recreatePage")?.addEventListener("click", () => {
   // Object Creation is FE specific, we will generate the ID here, and BE will store it in
   // the way they please, but they will always return in getAPI the last canvas JSON representation.
-  if (!activePage) {
+  if (!STORE.activePage) {
     console.log("No Active Page ID set");
     return;
   }
-  if (pageHistoryStack[activePage].length > 0) {
+  if (STORE.pageHistoryStack[STORE.activePage].length > 0) {
     canvas.loadFromJSON(
-      pageHistoryStack[activePage][pageHistoryStack[activePage].length - 1],
+      STORE.pageHistoryStack[STORE.activePage][STORE.pageHistoryStack[STORE.activePage].length - 1],
       (...args: any[]) => {
         // OnComplete
-        console.log("On Load Complete: ", args);
       }
     );
   }
@@ -161,24 +125,21 @@ app.querySelector("#recreatePage")?.addEventListener("click", () => {
 
 canvas.on("selection:created", function (options) {
   if (options.target) {
-    console.log("Selected: ", options.target.fill);
-    activeObject = options.target;
+    STORE.activeObject = options.target;
   }
 });
 canvas.on("selection:updated", function (options) {
   if (options.target) {
-    console.log("Selection Update: ", options.target.fill);
-    activeObject = options.target;
+    STORE.activeObject = options.target;
   }
 });
 canvas.on("selection:cleared", function () {
-  console.log("Selection Cleared");
-  activeObject = null;
+  STORE.activeObject = null;
 });
 
 app.addEventListener("click", (e: MouseEvent) => {
   const selectedColor = getRandomColors();
-  if (!activeObject) {
+  if (!STORE.activeObject) {
     console.log("Nothing selected");
     return;
   }
@@ -194,38 +155,29 @@ app.addEventListener("click", (e: MouseEvent) => {
   // 	objectsToUpdate.push(selectedObject);
   // }
 
-  console.log(
-    (e.target as HTMLButtonElement).id,
-    "changeFillColor",
-    "changeFillColor" === (e.currentTarget as HTMLButtonElement).id
-  );
   switch ((e.target as HTMLButtonElement).id) {
     case "changeFillColor":
-      activeObject.set("fill", selectedColor[0]);
-      console.log("New Color: ", selectedColor[0], activeObject.id);
-      update();
+      STORE.activeObject.set("fill", selectedColor[0]);
+      update(canvas);
       break;
     case "changeStrokeColor":
-      activeObject.set("stroke", selectedColor[1]);
-      update();
+      STORE.activeObject.set("stroke", selectedColor[1]);
+      update(canvas);
       break;
   }
 });
 
 app.querySelector("#undo")?.addEventListener("click", () => {
   // Shuffle the recent update between history and redo list.
-  redoUpdateStack[activePage] = redoUpdateStack[activePage] || [];
-  const currentPageHistory = pageHistoryStack[activePage];
+  STORE.redoUpdateStack[STORE.activePage] = STORE.redoUpdateStack[STORE.activePage] || [];
+  const currentPageHistory = STORE.pageHistoryStack[STORE.activePage];
   const recentUpdate = currentPageHistory.pop();
-  console.log("Update: ", recentUpdate);
   if (recentUpdate) {
     const lastIndex = currentPageHistory.length - 1;
     const last = currentPageHistory[lastIndex];
-    console.log("Undo started");
-    redoUpdateStack[activePage].push(recentUpdate);
+    STORE.redoUpdateStack[STORE.activePage].push(recentUpdate);
     if (last) {
       canvas.loadFromJSON(last, () => {
-        console.log("Undo complete");
       });
     } else {
       canvas.clear();
@@ -235,14 +187,13 @@ app.querySelector("#undo")?.addEventListener("click", () => {
 
 app.querySelector("#redo")?.addEventListener("click", () => {
   // Shuffle the recent update between history and redo list.
-  const activeRedoStack = redoUpdateStack[activePage];
+  const activeRedoStack = STORE.redoUpdateStack[STORE.activePage];
   if (activeRedoStack && activeRedoStack.length > 0) {
-    const currentPageHistory = pageHistoryStack[activePage];
+    const currentPageHistory = STORE.pageHistoryStack[STORE.activePage];
     const lastUndo = activeRedoStack.pop();
     if (lastUndo) {
       currentPageHistory.push(lastUndo);
       canvas.loadFromJSON(lastUndo, () => {
-        console.log("Redo complete");
       });
     }
   }
@@ -255,14 +206,14 @@ const MARK_KEYS = {
 };
 
 const Renderer = () => {
-  const update = (time: number) => {
+  const renderUpdate = (time: number) => {
     if (API.rafId !== null) {
       // This will pause infinitely, if Browser Tab is out-of-focus.
       // We can hadle by replacing the `raf` call with `setTimeout` for the meantime
       // till use re-focuses on the Tab. In this meantime the Framerates will reduce to 1fps.
       // Since there is no activiity, I am guess this hack would work, but we will have to check
       // because Video Streaming might require more frames per second to work, not sure.
-      API.rafId = requestAnimationFrame(update);
+      API.rafId = requestAnimationFrame(renderUpdate);
       if (time - API.timestamp > 1000 / 15) {
         performance.mark(MARK_KEYS.mark1);
         API.timestamp = time;
@@ -289,7 +240,7 @@ const Renderer = () => {
     start() {
       API.rafId = requestAnimationFrame((time) => {
         API.timestamp = time;
-        update(API.timestamp);
+        renderUpdate(API.timestamp);
       });
     },
     end() {
@@ -344,7 +295,6 @@ app.querySelector("#addStar")?.addEventListener("click", (e) => {
   const pos = getRandomPos();
   const objectId = uuidv4();
   fabric.loadSVGFromURL(StarSVG, (results) => {
-    console.log("Star SVG Loaded: ", results);
     const star = results[0];
     star.set({
       // @ts-ignore
@@ -359,12 +309,13 @@ app.querySelector("#addStar")?.addEventListener("click", (e) => {
       scaleY: 10,
     } as fabric.IPathOptions);
     canvas.add(star);
-    objectsPerPage[activePage] = {
+    STORE.objectsPerPage[STORE.activePage] = {
       [objectId]: {
         id: objectId,
         object: star,
       },
     };
-    update();
+    update(canvas);
   });
 });
+
