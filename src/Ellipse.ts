@@ -53,6 +53,7 @@ export class Ellipse {
   }
 
   onMouseUp = (_obj: fabric.IEvent<Event>) =>  {
+    update(this.canvas);
     this.disable();
     this.reset();
     this.destroy();
@@ -124,6 +125,5 @@ export class Ellipse {
         object: ellipse,
       },
     };
-    update(this.canvas);
   }
 }
