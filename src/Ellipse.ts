@@ -1,5 +1,5 @@
 // https://stackoverflow.com/questions/33111045/how-to-free-draw-circle-using-fabric-js
-
+// import { fabric } from "./vendor/fabric";
 import { STORE, update } from "./store";
 import { uuidv4 } from "./uuid4";
 

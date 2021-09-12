@@ -6,6 +6,8 @@ import { getRandomColors, getRandomPos } from "./utils";
 import { Star } from "./Star";
 // import { fabric } from "./vendor/fabric";
 
+// https://codepen.io/MarsAndBack/pen/bGExXzd Custom handles
+
 const app = document.querySelector<HTMLDivElement>("#app")!;
 
 const canvas = new fabric.Canvas(
@@ -225,10 +227,15 @@ const renderer = Renderer();
 renderer.start();
 
 // @ts-ignore
+window.canvas = canvas;
+// @ts-ignore
 window.renderer = renderer;
 
 app.querySelector("#drawingMode")?.addEventListener("click", (e) => {
   // http://fabricjs.com/freedrawing
+  // http://fabricjs.com/erasing
+  canvas.freeDrawingBrush = new fabric.PencilBrush(canvas);
+  canvas.freeDrawingBrush.width = 8;
   canvas.isDrawingMode = !canvas.isDrawingMode;
   (<HTMLButtonElement>e.target).textContent = canvas.isDrawingMode
     ? "Exit Drawing Mode"
@@ -279,3 +286,23 @@ app.querySelector("#addStar")?.addEventListener("click", (e) => {
     (<HTMLButtonElement>e.target).textContent = "Create Star";
   });
 });
+
+const handleErasingComplete = (e: {path: fabric.Path} & MouseEvent | fabric.IEvent) => {
+  update(canvas);
+}
+
+app.querySelector("#eraser")?.addEventListener("click", (e) => {
+  canvas.freeDrawingBrush = new fabric.EraserBrush(canvas);
+  canvas.freeDrawingBrush.width = 10;
+  canvas.isDrawingMode = !canvas.isDrawingMode;
+  if (canvas.isDrawingMode) {
+    (<HTMLButtonElement>e.target).textContent =  "Erasing";
+    canvas.on("erasing:end", handleErasingComplete);
+  } else {
+    (<HTMLButtonElement>e.target).textContent =  "Erase";
+    canvas.off("erasing:end", handleErasingComplete);
+  }
+
+
+});
+

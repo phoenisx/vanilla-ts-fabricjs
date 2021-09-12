@@ -7,7 +7,8 @@
     <title>Fabric Test</title>
   </head>
   <body>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/451/fabric.min.js" integrity="sha512-qeu8RcLnpzoRnEotT3r1CxB17JtHrBqlfSTOm4MQzb7efBdkcL03t343gyRmI6OTUW6iI+hShiysszISQ/IahA==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <!-- <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/451/fabric.min.js" integrity="sha512-qeu8RcLnpzoRnEotT3r1CxB17JtHrBqlfSTOm4MQzb7efBdkcL03t343gyRmI6OTUW6iI+hShiysszISQ/IahA==" crossorigin="anonymous" referrerpolicy="no-referrer"></script> -->
+    <script src="/src/vendor/fabric.js" referrerpolicy="no-referrer"></script>
     <div id="app">
       <canvas id="canvas" width="1024" height="576"></canvas>
       <div class="grid">
@@ -25,6 +26,7 @@
         <button id="addText">Add Text</button>
         <button id="alignCenter">Align Center</button>
         <button id="addStar">Add Star</button>
+        <button id="eraser">Erase</button>
       </div>
     </div>
     <script type="module" src="/src/main.ts"></script>
